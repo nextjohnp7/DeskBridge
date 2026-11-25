@@ -6,8 +6,13 @@ and provides CLI commands for using them.
 
 import json
 import os
+import sys
 
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template, request
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.installer import install_wrapper
 
 app = Flask(__name__)
 
@@ -38,6 +43,15 @@ def discover_wrappers():
 def index():
     wrappers = discover_wrappers()
     return render_template("index.html", wrappers=wrappers)
+
+
+@app.route("/install/<app_name>", methods=["POST"])
+def install(app_name: str):
+    """Install a new wrapper scaffold via the web hub."""
+    result = install_wrapper(app_name)
+    if result["ok"]:
+        return jsonify({"ok": True, "message": result["message"]})
+    return jsonify({"ok": False, "error": result["error"]}), 400
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+{
+  "name": "obsidian",
+  "version": "0.1.0",
+  "target_app": "Obsidian",
+  "description": "Wrapper for controlling Obsidian headlessly via AI agents",
+  "actions": {}
+}

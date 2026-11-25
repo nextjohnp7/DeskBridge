@@ -1,0 +1,7 @@
+{
+  "name": "zotero",
+  "version": "0.1.0",
+  "target_app": "Zotero",
+  "description": "Wrapper for controlling Zotero headlessly via AI agents",
+  "actions": {}
+}
