@@ -21,3 +21,6 @@ Thumbs.db
 # Logs
 *.log
 hub_server.log
+
+# Generated reports
+reports/
