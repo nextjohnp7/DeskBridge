@@ -87,10 +87,55 @@ def test_chart_generator_creates_file():
     print(f"Chart generator creates valid SVG: {output_path}")
 
 
+def test_desktop_control_requires_hermes_agent():
+    """Desktop control functions return clear error outside Hermes agent context."""
+    from core.desktop_control import capture, click, type_text, press_keys, scroll, drag, list_apps, list_windows, focus_app
+
+    # All functions should return ok=False with a clear error message
+    result = capture()
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = click(element=1)
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = type_text("hello")
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = press_keys("return")
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = scroll("down")
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = drag(from_element=1, to_element=2)
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = list_apps()
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = list_windows()
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    result = focus_app("TestApp")
+    assert result["ok"] is False
+    assert "Hermes agent environment" in result.get("message", "")
+
+    print("Desktop control correctly requires Hermes agent environment")
+
+
 if __name__ == "__main__":
     test_wrapper_discovery_finds_all_wrappers()
     test_manifest_has_required_fields()
     test_cli_help_runs()
     test_activity_log_record_and_read()
     test_chart_generator_creates_file()
+    test_desktop_control_requires_hermes_agent()
     print("\nAll checks passed.")
