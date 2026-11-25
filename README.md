@@ -34,10 +34,25 @@ Production (waitress WSGI server):
 python hub/run_production.py
 ```
 
+## Activity log
+```bash
+python deskbridge.py log [limit]
+```
+Displays recent activity log entries (newest first). Optional `limit` restricts the number of entries.
+
+## Chart generation
+```bash
+python deskbridge.py chart
+```
+Generates an SVG bar chart of activity statistics (success vs. failure per wrapper) and saves it to `reports/activity_chart.svg`.
+
 ## Completed
 - [x] Blender render wrapper
 - [x] Core loader + confirmation
+- [x] Activity log tracking
+- [x] Chart generation (SVG)
 - [x] Simple CLI-Hub registry
 - [x] Second application wrapper (GIMP)
 - [x] Install command (`deskbridge install <app>`)
+- [x] Web install via CLI-Hub (`POST /install/<app>`)
 - [x] Production CLI-Hub (waitress)
