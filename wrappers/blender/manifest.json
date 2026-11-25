@@ -1,0 +1,13 @@
+{
+  "name": "blender",
+  "version": "0.1.0",
+  "target_app": "Blender",
+  "description": "Wrapper for controlling Blender headlessly via AI agents",
+  "actions": {
+    "render_scene": {
+      "description": "Render Blender scene to an output file",
+      "risk": "medium",
+      "args": ["file_path", "output_path"]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "gimp",
+  "version": "0.1.0",
+  "target_app": "GIMP",
+  "description": "Wrapper for controlling GIMP headlessly via AI agents",
+  "actions": {
+    "export_image": {
+      "description": "Load an image and export it to an output file using GIMP batch mode",
+      "risk": "medium",
+      "args": ["input_path", "output_path"]
+    }
+  }
+}

@@ -1,0 +1,3 @@
+# Dependencies for CLI-Hub (Flask). Core wrappers use standard library only.
+Flask==3.0.0
+waitress==3.0.0
