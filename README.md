@@ -65,7 +65,7 @@ Controls any desktop application through screenshots, mouse clicks, keyboard inp
 
 Risky actions (`click`, `type`, `key`, `drag`) require confirmation (`y/n`) unless `--confirm` is passed. All desktop actions are recorded in the activity log.
 
-**Note:** Desktop control requires the Hermes agent environment (the `computer_use` tool is only available through the Hermes agent). Running `deskbridge.py desktop ...` outside the Hermes agent will return an error explaining this requirement.
+**Note:** Desktop control works with any registered backend. By default, DeskBridge tries the Hermes `computer_use` backend (when running inside the Hermes agent) and falls back to the PyAutoGUI backend (if `pip install pyautogui` has been done). If no backend is available, commands return a clear error explaining how to install one.
 
 ## Pluggable desktop backends
 

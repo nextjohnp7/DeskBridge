@@ -351,6 +351,190 @@ class HermesComputerUseBackend(DesktopBackend):
         }
 
 
+class PyAutoGUIBackend(DesktopBackend):
+    """Backend that wraps the PyAutoGUI Python package.
+
+    Available cross-platform without requiring the Hermes agent context.
+    Requires: pip install pyautogui
+    """
+
+    name = "pyautogui"
+
+    def _require_pyautogui(self) -> dict:
+        try:
+            import pyautogui  # noqa: F401
+        except ImportError:
+            return {
+                "ok": False,
+                "error": "pyautogui not installed",
+                "message": "Install pyautogui to use the PyAutoGUI backend",
+            }
+        return {"ok": True}
+
+    def capture(self, app: str | None = None, mode: str = "som") -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            import tempfile
+            screenshot = pyautogui.screenshot()
+            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False, dir=os.getcwd())
+            screenshot.save(tmp.name)
+            return {
+                "ok": True,
+                "message": f"Captured screenshot: {tmp.name}",
+                "screenshot_path": tmp.name,
+                "element_count": None,
+                "app": app,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "app": app}
+
+    def click(
+        self,
+        element: int | None = None,
+        coordinate: list[int] | None = None,
+        app: str | None = None,
+        button: str = "left",
+        modifiers: list[str] | None = None,
+        delivery_mode: str = "background",
+    ) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            if coordinate:
+                x, y = coordinate
+                pyautogui.click(x=x, y=y, button=button)
+                return {"ok": True, "message": f"Clicked at {coordinate}", "app": app}
+            return {
+                "ok": False,
+                "error": "PyAutoGUI backend requires --coordinate, not --element",
+                "app": app,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "app": app}
+
+    def type_text(
+        self, text: str, app: str | None = None, delivery_mode: str = "background"
+    ) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            pyautogui.write(text)
+            return {"ok": True, "message": "Typed text", "app": app}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "app": app}
+
+    def press_keys(
+        self, keys: str, app: str | None = None, delivery_mode: str = "background"
+    ) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            key_list = keys.replace("cmd", "command").split("+")
+            pyautogui.hotkey(*key_list)
+            return {"ok": True, "message": f"Pressed keys: {keys}", "app": app}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "app": app}
+
+    def scroll(
+        self,
+        direction: str,
+        amount: int = 3,
+        app: str | None = None,
+        delivery_mode: str = "background",
+    ) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            scroll_amount = amount if direction == "up" else -amount
+            pyautogui.scroll(scroll_amount)
+            return {
+                "ok": True,
+                "message": f"Scrolled {direction} ({amount} ticks)",
+                "app": app,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "app": app}
+
+    def drag(
+        self,
+        from_element: int | None = None,
+        from_coordinate: list[int] | None = None,
+        to_element: int | None = None,
+        to_coordinate: list[int] | None = None,
+        app: str | None = None,
+        delivery_mode: str = "background",
+    ) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            if from_coordinate and to_coordinate:
+                x1, y1 = from_coordinate
+                x2, y2 = to_coordinate
+                pyautogui.moveTo(x1, y1)
+                pyautogui.dragTo(x2, y2, button="left")
+                return {"ok": True, "message": "Dragged", "app": app}
+            return {
+                "ok": False,
+                "error": "PyAutoGUI backend requires --from-coordinate and --to-coordinate",
+                "app": app,
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "app": app}
+
+    def list_apps(self) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            active = pyautogui.getActiveWindowTitle()
+            return {
+                "ok": True,
+                "message": f"Active window: {active or 'unknown'}",
+                "apps": [active] if active else [],
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def list_windows(self) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        try:
+            import pyautogui
+            active = pyautogui.getActiveWindowTitle()
+            return {
+                "ok": True,
+                "message": f"Active window: {active or 'unknown'}",
+                "windows": [active] if active else [],
+            }
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def focus_app(self, app: str, raise_window: bool = False) -> dict:
+        check = self._require_pyautogui()
+        if not check["ok"]:
+            return check
+        return {
+            "ok": False,
+            "error": "focus_app not supported by PyAutoGUI backend",
+            "app": app,
+        }
+
+
 class DesktopController:
     """Manages desktop backends and routes calls to the first available one."""
 
@@ -363,12 +547,19 @@ class DesktopController:
         """Auto-detect available backends.
 
         Order matters: prefer Hermes computer_use when running inside the
-        Hermes agent; fall back to other backends as they are implemented.
+        Hermes agent; fall back to PyAutoGUI when installed.
         """
         try:
             from hermes_tools import tool_call  # noqa: F401  (availability check)
 
             self.backends.append(HermesComputerUseBackend())
+        except ImportError:
+            pass
+
+        try:
+            import pyautogui  # noqa: F401  (availability check)
+
+            self.backends.append(PyAutoGUIBackend())
         except ImportError:
             pass
 
@@ -396,9 +587,9 @@ class DesktopController:
             "ok": False,
             "error": "No desktop backend available",
             "message": (
-                "Desktop control requires the Hermes agent environment or "
-                "a registered desktop backend. Install Hermes Agent or add "
-                "a DesktopBackend subclass (e.g. MCP backend)."
+                "No desktop backend is available. Install Hermes Agent (for the "
+                "computer_use backend) or install pyautogui (for the PyAutoGUI "
+                "backend), or register a custom DesktopBackend subclass."
             ),
             "app": app_name,
         }

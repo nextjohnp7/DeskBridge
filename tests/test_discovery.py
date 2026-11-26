@@ -94,41 +94,41 @@ def test_desktop_control_requires_hermes_agent():
     # All functions should return ok=False with a clear error message
     result = capture()
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = click(element=1)
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = type_text("hello")
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = press_keys("return")
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = scroll("down")
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = drag(from_element=1, to_element=2)
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = list_apps()
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = list_windows()
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
     result = focus_app("TestApp")
     assert result["ok"] is False
-    assert "Hermes agent environment" in result.get("message", "")
+    assert "No desktop backend is available" in result.get("message", "")
 
-    print("Desktop control correctly requires Hermes agent environment")
+    print("Desktop control correctly reports no backend available")
 
 
 if __name__ == "__main__":
