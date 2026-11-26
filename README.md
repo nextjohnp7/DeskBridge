@@ -67,6 +67,32 @@ Risky actions (`click`, `type`, `key`, `drag`) require confirmation (`y/n`) unle
 
 **Note:** Desktop control requires the Hermes agent environment (the `computer_use` tool is only available through the Hermes agent). Running `deskbridge.py desktop ...` outside the Hermes agent will return an error explaining this requirement.
 
+## Pluggable desktop backends
+
+`core.desktop_control` uses a pluggable backend architecture so DeskBridge is
+not locked to a single desktop automation vendor:
+
+- `DesktopBackend` — abstract base class; subclass it to add a new backend.
+- `HermesComputerUseBackend` — wraps the Hermes `computer_use` tool (cua-driver).
+- `DesktopController` — auto-detects available backends and routes calls to the first one.
+
+To add a non-Hermes backend (MCP, Claude Desktop, pyautogui, etc.):
+
+```python
+from core.desktop_control import DesktopBackend, register_backend
+
+class MCPDesktopBackend(DesktopBackend):
+    name = "mcp"
+    def capture(self, app=None, mode="som"): ...
+    def click(self, element=None, coordinate=None, app=None, ...): ...
+    # implement all abstract methods
+
+register_backend(MCPDesktopBackend())
+```
+
+Register backends before calling any desktop function. The controller tries
+backends in registration order and uses the first available one.
+
 ## Completed
 - [x] Blender render wrapper
 - [x] Core loader + confirmation
