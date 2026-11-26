@@ -133,11 +133,10 @@ Add to `~/.hermes/config.yaml`:
 mcp_servers:
   deskbridge:
     command: "python"
-    args: ["D:/GitHub Project nextjohnp7/DeskBridge/mcp_server.py"]
+    args: ["path/to/DeskBridge/mcp_server.py"]
 ```
 
-Restart Hermes Agent. The MCP tools become available as `mcp_deskbridge_*`
-in every conversation.
+Replace `path/to/DeskBridge/mcp_server.py` with the actual path to your DeskBridge installation. Restart Hermes Agent. The MCP tools become available as `mcp_deskbridge_*` in every conversation.
 
 ### Configure in Claude Desktop
 
@@ -148,11 +147,13 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "deskbridge": {
       "command": "python",
-      "args": ["D:/GitHub Project nextjohnp7/DeskBridge/mcp_server.py"]
+      "args": ["path/to/DeskBridge/mcp_server.py"]
     }
   }
 }
 ```
+
+Replace `path/to/DeskBridge/mcp_server.py` with the actual path to your DeskBridge installation.
 
 ## Completed
 - [x] Blender render wrapper

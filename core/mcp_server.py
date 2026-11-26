@@ -45,7 +45,18 @@ SERVER_NAME = "deskbridge"
 
 
 def build_server() -> Server:
-    """Build and configure the MCP server with all DeskBridge tools."""
+    """Build and configure the MCP server with all DeskBridge tools.
+
+    Raises
+    ------
+    ImportError
+        If the ``mcp`` package is not installed.
+    """
+    if not MCP_AVAILABLE:
+        raise ImportError(
+            "The 'mcp' package is required to run the MCP server. "
+            "Install it with: pip install mcp"
+        )
     server = Server(SERVER_NAME)
 
     @server.list_tools()
