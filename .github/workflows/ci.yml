@@ -28,7 +28,7 @@ jobs:
 
       - name: Compile-check all Python files
         run: |
-          python -m py_compile deskbridge.py core/activity_log.py core/chart_generator.py core/confirm.py core/desktop_control.py core/installer.py core/loader.py wrappers/blender/actions.py wrappers/blender/cli.py wrappers/gimp/actions.py wrappers/gimp/cli.py wrappers/inkscape/actions.py wrappers/inkscape/cli.py wrappers/obsidian/actions.py wrappers/obsidian/cli.py wrappers/zotero/actions.py wrappers/zotero/cli.py hub/app.py hub/run_production.py tests/test_discovery.py
+          python -m py_compile deskbridge.py mcp_server.py core/activity_log.py core/chart_generator.py core/confirm.py core/desktop_control.py core/installer.py core/loader.py core/mcp_server.py wrappers/blender/actions.py wrappers/blender/cli.py wrappers/gimp/actions.py wrappers/gimp/cli.py wrappers/inkscape/actions.py wrappers/inkscape/cli.py wrappers/obsidian/actions.py wrappers/obsidian/cli.py wrappers/zotero/actions.py wrappers/zotero/cli.py hub/app.py hub/run_production.py tests/test_discovery.py
 
       - name: Run test suite
         run: |

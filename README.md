@@ -74,6 +74,7 @@ not locked to a single desktop automation vendor:
 
 - `DesktopBackend` — abstract base class; subclass it to add a new backend.
 - `HermesComputerUseBackend` — wraps the Hermes `computer_use` tool (cua-driver).
+- `PyAutoGUIBackend` — wraps PyAutoGUI for cross-platform desktop control without the Hermes agent.
 - `DesktopController` — auto-detects available backends and routes calls to the first one.
 
 To add a non-Hermes backend (MCP, Claude Desktop, pyautogui, etc.):
@@ -93,12 +94,73 @@ register_backend(MCPDesktopBackend())
 Register backends before calling any desktop function. The controller tries
 backends in registration order and uses the first available one.
 
+## MCP Server (Model Context Protocol)
+
+DeskBridge includes an MCP server so AI agents like Claude Desktop, Cursor,
+and other MCP-compatible agents can connect directly without custom code.
+
+### Run the MCP server
+
+```bash
+python mcp_server.py
+```
+
+The server communicates over stdio and exposes 15 tools:
+
+| Tool | Description |
+|------|-------------|
+| `desktop_capture` | Capture screenshot |
+| `desktop_click` | Click element/coordinate |
+| `desktop_type` | Type text |
+| `desktop_key` | Press key combination |
+| `desktop_scroll` | Scroll |
+| `desktop_drag` | Drag between points |
+| `desktop_list_apps` | List running applications |
+| `desktop_list_windows` | List open windows |
+| `desktop_focus_app` | Focus an application |
+| `desktop_list_backends` | List desktop backends |
+| `wrapper_call` | Call a wrapper action |
+| `wrapper_install` | Install a new wrapper |
+| `wrapper_list` | List installed wrappers |
+| `activity_log_read` | Read activity log |
+| `activity_chart_generate` | Generate activity chart |
+
+### Configure in Hermes Agent
+
+Add to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  deskbridge:
+    command: "python"
+    args: ["D:/GitHub Project nextjohnp7/DeskBridge/mcp_server.py"]
+```
+
+Restart Hermes Agent. The MCP tools become available as `mcp_deskbridge_*`
+in every conversation.
+
+### Configure in Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "deskbridge": {
+      "command": "python",
+      "args": ["D:/GitHub Project nextjohnp7/DeskBridge/mcp_server.py"]
+    }
+  }
+}
+```
+
 ## Completed
 - [x] Blender render wrapper
 - [x] Core loader + confirmation
 - [x] Activity log tracking
 - [x] Chart generation (SVG)
-- [x] Desktop control (computer_use integration)
+- [x] Desktop control (computer_use + PyAutoGUI backends)
+- [x] MCP server (15 tools for Claude Desktop, Cursor, etc.)
 - [x] Simple CLI-Hub registry
 - [x] Second application wrapper (GIMP)
 - [x] Install command (`deskbridge install <app>`)

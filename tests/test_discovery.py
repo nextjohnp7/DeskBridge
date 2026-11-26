@@ -131,6 +131,61 @@ def test_desktop_control_requires_hermes_agent():
     print("Desktop control correctly reports no backend available")
 
 
+def test_mcp_server_builds():
+    """MCP server can be built and lists tools."""
+    from core.mcp_server import build_server
+
+    server = build_server()
+    assert server is not None
+    assert server.name == "deskbridge"
+    print("MCP server builds successfully")
+
+
+def test_mcp_server_tools():
+    """MCP server exposes expected tools."""
+    from core.mcp_server import build_server
+    import mcp.types as types
+    import asyncio
+
+    server = build_server()
+
+    # Get the registered list_tools handler
+    handler = server.request_handlers[types.ListToolsRequest]
+    result = asyncio.run(handler(None))
+    # MCP returns ServerResult(root=ListToolsResult(tools=[...]))
+    tools = result.root.tools if hasattr(result, "root") else result
+    tool_names = {t.name for t in tools}
+    expected = {
+        "desktop_capture",
+        "desktop_click",
+        "desktop_type",
+        "desktop_key",
+        "desktop_scroll",
+        "desktop_drag",
+        "desktop_list_apps",
+        "desktop_list_windows",
+        "desktop_focus_app",
+        "desktop_list_backends",
+        "wrapper_call",
+        "wrapper_install",
+        "wrapper_list",
+        "activity_log_read",
+        "activity_chart_generate",
+    }
+    assert expected.issubset(tool_names), f"Missing tools: {expected - tool_names}"
+    print(f"MCP server exposes {len(tools)} tools")
+
+
+def test_mcp_dispatch_unknown_tool():
+    """MCP dispatch returns error for unknown tool."""
+    from core.mcp_server import _dispatch
+
+    result = _dispatch("nonexistent_tool", {})
+    assert result["ok"] is False
+    assert "Unknown tool" in result.get("error", "")
+    print("MCP dispatch handles unknown tool")
+
+
 if __name__ == "__main__":
     test_wrapper_discovery_finds_all_wrappers()
     test_manifest_has_required_fields()
@@ -138,4 +193,7 @@ if __name__ == "__main__":
     test_activity_log_record_and_read()
     test_chart_generator_creates_file()
     test_desktop_control_requires_hermes_agent()
+    test_mcp_server_builds()
+    test_mcp_server_tools()
+    test_mcp_dispatch_unknown_tool()
     print("\nAll checks passed.")
