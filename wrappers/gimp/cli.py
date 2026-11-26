@@ -12,7 +12,7 @@ sys.path.insert(
 )
 
 from core.confirm import confirm_action
-from .actions import export_image
+from wrappers.gimp.actions import export_image
 
 
 def main(argv=None):

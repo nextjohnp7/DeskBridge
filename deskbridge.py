@@ -1,4 +1,15 @@
-"""Main DeskBridge CLI entry point."""
+"""Main DeskBridge CLI entry point.
+
+Security model:
+- Every wrapper action and desktop action passes through
+  core.confirm.validate_action_permitted() (allowlist) before execution.
+- Medium/high-risk actions require confirmation via
+  core.confirm.confirm_action() (y/n prompt, or --confirm flag).
+- Non-interactive sessions reject medium/high-risk actions unless --confirm.
+- All decisions (approve/reject/cancel) are recorded to the activity log.
+- Unknown apps and unknown actions are rejected before execution.
+- Parameters are validated for type and range before being passed to wrappers.
+"""
 
 import argparse
 import os
@@ -8,6 +19,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.activity_log import record_action, read_logs
 from core.chart_generator import generate_chart
+from core.confirm import (
+    ConfirmationError,
+    DESKTOP_RISK_LEVELS,
+    confirm_action,
+    requires_confirmation,
+    validate_action_permitted,
+    validate_coordinates,
+    validate_parameter,
+)
 from core.desktop_control import (
     capture, click, type_text, press_keys, scroll, drag,
     list_apps, list_windows, focus_app,
@@ -15,14 +35,22 @@ from core.desktop_control import (
 from core.installer import install_wrapper
 from core.loader import load_wrapper
 
-
 DESKTOP_RISKY_ACTIONS = {"click", "type", "key", "drag"}
 
 
-def _desktop_confirm(action: str, target: str) -> bool:
-    """Ask user confirmation for risky desktop actions."""
-    answer = input(f"[DESKBRIDGE] Confirm desktop action [{action}] on {target}? (y/n): ")
-    return answer.strip().lower() == "y"
+def _desktop_confirm(action: str, target: str, confirm: bool = False) -> bool:
+    """Ask user confirmation for risky desktop actions.
+
+    Delegates to core.confirm.confirm_action() for centralized handling.
+    """
+    risk_level = DESKTOP_RISK_LEVELS.get(action, "medium")
+    return confirm_action(
+        risk_level=risk_level,
+        description=f"{action} on {target}",
+        confirm=confirm,
+        app="desktop",
+        action=action,
+    )
 
 
 def _handle_desktop(argv: list) -> int:
@@ -95,7 +123,11 @@ def _handle_desktop(argv: list) -> int:
     app_name = getattr(args, "app", None)
 
     if args.desktop_action == "capture":
-        result = capture(app=args.app, mode=args.mode)
+        try:
+            result = capture(app=args.app, mode=args.mode)
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         if result.get("screenshot_path"):
             print(f"Screenshot saved: {result['screenshot_path']}")
@@ -103,59 +135,97 @@ def _handle_desktop(argv: list) -> int:
 
     if args.desktop_action == "click":
         target = f"element #{args.element}" if args.element else f"coordinate {args.coordinate}"
-        if not args.confirm and _desktop_confirm("click", target):
+        try:
+            coordinate = validate_coordinates(args.coordinate) if args.coordinate else None
+            element = validate_parameter("element", args.element, int, min_value=1) if args.element else None
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
+        if not args.confirm and not _desktop_confirm("click", target, confirm=args.confirm):
             print("Cancelled by user.")
             return 0
-        result = click(
-            element=args.element,
-            coordinate=args.coordinate,
-            app=args.app,
-            button=args.button,
-            delivery_mode=args.delivery_mode,
-        )
+        try:
+            result = click(
+                element=element,
+                coordinate=coordinate,
+                app=args.app,
+                button=args.button,
+                delivery_mode=args.delivery_mode,
+            )
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         if result.get("screenshot_path"):
             print(f"Screenshot: {result['screenshot_path']}")
         return 0 if result["ok"] else 1
 
     if args.desktop_action == "type":
-        if not args.confirm and _desktop_confirm("type", args.text):
+        if not args.confirm and not _desktop_confirm("type", args.text, confirm=args.confirm):
             print("Cancelled by user.")
             return 0
-        result = type_text(text=args.text, app=args.app, delivery_mode=args.delivery_mode)
+        try:
+            result = type_text(text=args.text, app=args.app, delivery_mode=args.delivery_mode)
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         return 0 if result["ok"] else 1
 
     if args.desktop_action == "key":
-        if not args.confirm and _desktop_confirm("key", args.keys):
+        if not args.confirm and not _desktop_confirm("key", args.keys, confirm=args.confirm):
             print("Cancelled by user.")
             return 0
-        result = press_keys(keys=args.keys, app=args.app, delivery_mode=args.delivery_mode)
+        try:
+            result = press_keys(keys=args.keys, app=args.app, delivery_mode=args.delivery_mode)
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         return 0 if result["ok"] else 1
 
     if args.desktop_action == "scroll":
-        result = scroll(
-            direction=args.direction,
-            amount=args.amount,
-            app=args.app,
-            delivery_mode=args.delivery_mode,
-        )
+        try:
+            amount = validate_parameter("amount", args.amount, int, min_value=1, max_value=100)
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
+        try:
+            result = scroll(
+                direction=args.direction,
+                amount=amount,
+                app=args.app,
+                delivery_mode=args.delivery_mode,
+            )
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         return 0 if result["ok"] else 1
 
     if args.desktop_action == "drag":
-        if not args.confirm and _desktop_confirm("drag", f"{args.app or 'frontmost'}"):
+        target = f"{args.app or 'frontmost'}"
+        if not args.confirm and not _desktop_confirm("drag", target, confirm=args.confirm):
             print("Cancelled by user.")
             return 0
-        result = drag(
-            from_element=args.from_element,
-            from_coordinate=args.from_coordinate,
-            to_element=args.to_element,
-            to_coordinate=args.to_coordinate,
-            app=args.app,
-            delivery_mode=args.delivery_mode,
-        )
+        try:
+            from_coordinate = validate_coordinates(args.from_coordinate) if args.from_coordinate else None
+            to_coordinate = validate_coordinates(args.to_coordinate) if args.to_coordinate else None
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
+        try:
+            result = drag(
+                from_element=args.from_element,
+                from_coordinate=from_coordinate,
+                to_element=args.to_element,
+                to_coordinate=to_coordinate,
+                app=args.app,
+                delivery_mode=args.delivery_mode,
+            )
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         return 0 if result["ok"] else 1
 
@@ -174,7 +244,11 @@ def _handle_desktop(argv: list) -> int:
         return 0 if result["ok"] else 1
 
     if args.desktop_action == "focus-app":
-        result = focus_app(app=args.app, raise_window=args.raise_window)
+        try:
+            result = focus_app(app=args.app, raise_window=args.raise_window)
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            return 1
         print(result.get("message", result.get("error", "Unknown result")))
         return 0 if result["ok"] else 1
 
@@ -226,16 +300,8 @@ def main(argv=None):
     if args.app == "desktop":
         sys.exit(_handle_desktop(args.command))
 
-    try:
-        manifest, cli_module = load_wrapper(args.app)
-    except Exception as exc:
-        print(f"[FAILED] Unable to load wrapper '{args.app}': {exc}")
-        sys.exit(1)
-
-    print(
-        f"Wrapper: {manifest['name']} v{manifest['version']} "
-        f"({manifest['target_app']})"
-    )
+    # --- Wrapper execution path with security checks ---
+    app_name = args.app
 
     # Extract action name from command args
     action_name = args.command[0] if args.command else "unknown"
@@ -256,17 +322,99 @@ def main(argv=None):
         else:
             i += 1
 
+    # Security check 1: allowlist validation (app + action)
     try:
-        cli_module.main(args.command)
-        record_action(args.app, action_name, action_args, "success", "")
-        print(f"[LOG] Action recorded: {args.app} {action_name}")
+        validate_action_permitted(app_name, action_name, action_args)
+    except ConfirmationError as exc:
+        print(f"[REJECTED] {exc}")
+        sys.exit(1)
+
+    # Security check 2: parameter validation
+    # Validate common parameters if present
+    validated_args = {}
+    for key, value in action_args.items():
+        if key in ("element", "from_element", "to_element"):
+            try:
+                validated_args[key] = validate_parameter(key, value, int, min_value=1)
+            except ConfirmationError as exc:
+                print(f"[REJECTED] {exc}")
+                sys.exit(1)
+        elif key in ("amount",):
+            try:
+                validated_args[key] = validate_parameter(key, value, int, min_value=1, max_value=100)
+            except ConfirmationError as exc:
+                print(f"[REJECTED] {exc}")
+                sys.exit(1)
+        elif key in ("x", "y"):
+            try:
+                validated_args[key] = validate_parameter(key, value, int, min_value=0, max_value=9999)
+            except ConfirmationError as exc:
+                print(f"[REJECTED] {exc}")
+                sys.exit(1)
+        else:
+            validated_args[key] = value
+
+    # Security check 3: confirmation for risky wrapper actions
+    # Read risk level from manifest if available
+    from core.loader import load_wrapper as _load_wrapper
+    try:
+        manifest, _ = _load_wrapper(app_name)
+        actions = manifest.get("actions", {})
+        action_def = actions.get(action_name, {})
+        risk_level = action_def.get("risk", "medium")
+    except Exception:
+        risk_level = "medium"
+
+    confirm_flag = validated_args.pop("confirm", False)
+    if not confirm_flag and requires_confirmation(risk_level):
+        try:
+            approved = confirm_action(
+                risk_level=risk_level,
+                description=f"{action_name} on {app_name}",
+                app=app_name,
+                action=action_name,
+                args=validated_args,
+            )
+        except ConfirmationError as exc:
+            print(f"[REJECTED] {exc}")
+            sys.exit(1)
+        if not approved:
+            print("Cancelled by user.")
+            sys.exit(0)
+
+    # Execute the wrapper action
+    try:
+        manifest, cli_module = load_wrapper(app_name)
+    except Exception as exc:
+        print(f"[FAILED] Unable to load wrapper '{app_name}': {exc}")
+        sys.exit(1)
+
+    print(
+        f"Wrapper: {manifest['name']} v{manifest['version']} "
+        f"({manifest['target_app']})"
+    )
+
+    # Build CLI args from validated args dict
+    cli_args = [action_name]
+    for key, value in validated_args.items():
+        if isinstance(value, bool):
+            if value:
+                cli_args.append(f"--{key}")
+        else:
+            cli_args.append(f"--{key}")
+            cli_args.append(str(value))
+
+    try:
+        cli_module.main(cli_args)
+        record_action(app_name, action_name, validated_args, "success", "")
+        print(f"[LOG] Action recorded: {app_name} {action_name}")
     except SystemExit as exc:
         if exc.code == 0:
-            record_action(args.app, action_name, action_args, "success", "")
-            print(f"[LOG] Action recorded: {args.app} {action_name}")
+            record_action(app_name, action_name, validated_args, "success", "")
+            print(f"[LOG] Action recorded: {app_name} {action_name}")
         else:
-            record_action(args.app, action_name, action_args, "failed", f"exit code {exc.code}")
-            print(f"[LOG] Action recorded (failed): {args.app} {action_name}")
+            record_action(app_name, action_name, validated_args, "failed", f"exit code {exc.code}")
+            print(f"[LOG] Action recorded (failed): {app_name} {action_name}")
         sys.exit(exc.code)
 
 

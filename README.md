@@ -155,7 +155,66 @@ Add to `claude_desktop_config.json`:
 
 Replace `path/to/DeskBridge/mcp_server.py` with the actual path to your DeskBridge installation.
 
-## Completed
+## Security Model
+
+DeskBridge is designed to be safe, auditable, and transparent. Every action
+passes through centralized security checks before execution.
+
+### Safety confirmations
+
+| Risk level | Behavior |
+|------------|----------|
+| **low** | Auto-approved, no prompt |
+| **medium** | Requires explicit y/n confirmation (or `--confirm` flag) |
+| **high** | Requires explicit y/n confirmation (or `--confirm` flag) |
+
+**How confirmation works:**
+1. User runs a medium/high-risk action (e.g. `click`, `type`, `key`, `drag`).
+2. DeskBridge prints the action description and asks `Proceed? (y/n):`.
+3. Only `y` approves; anything else cancels.
+4. The `--confirm` flag skips the prompt (for automation/CI).
+5. In non-interactive sessions (no TTY, e.g. CI/CD, MCP server), medium/high-risk actions are **rejected** unless `--confirm` is passed.
+6. Every decision (approved/rejected/cancelled) is recorded to `logs/activity.log`.
+
+### Allowlist (command restriction)
+
+Only apps with an installed wrapper under `wrappers/<app>/manifest.json` can be executed.
+Only actions declared in that manifest's `actions` field are permitted.
+Unknown apps and unknown actions are **rejected before execution** with a clear error.
+
+### Parameter validation
+
+All parameters are validated for type and range before being passed to a wrapper:
+- Integer parameters must be integers (string coercion attempted).
+- Numeric parameters can have `min`/`max` bounds.
+- Coordinate parameters must be `[x, y]` pairs within valid bounds.
+- Invalid parameters raise a clear error and block execution.
+
+### Blocked applications
+
+Applications on the security block list (`BLOCKED_APPS` in `core.confirm`) are
+rejected even if a wrapper is installed. Add dangerous system processes here.
+
+### Activity logging
+
+Every action and confirmation decision is recorded to `logs/activity.log` as
+one JSON record per line:
+
+```json
+{"timestamp": "2026-11-26T10:30:00.123456", "app": "blender", "action": "render", "args": {"file": "scene.blend"}, "status": "success", "message": ""}
+```
+
+Status values: `success`, `failed`, `rejected`, `cancelled`.
+Logs are append-only and never auto-deleted; use `deskbridge log` to read or
+`core.activity_log.clear_logs()` to clear programmatically.
+
+**No API keys, tokens, passwords, or credentials are stored in code or logs.**
+
+### Local validation before execution
+
+All security checks (allowlist, parameter validation, confirmation) happen
+**locally before** any desktop action or wrapper code is executed. Nothing is
+sent to a remote server.
 - [x] Blender render wrapper
 - [x] Core loader + confirmation
 - [x] Activity log tracking

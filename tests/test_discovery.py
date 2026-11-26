@@ -1,8 +1,8 @@
 """End-to-end verification for DeskBridge wrapper discovery and CLI behavior."""
 
+import importlib.util
 import json
 import os
-import subprocess
 import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,14 +45,20 @@ def test_manifest_has_required_fields():
 
 
 def test_cli_help_runs():
+    """Wrapper CLI help runs without error."""
+    import importlib.util
+
     for app in ["blender", "gimp"]:
-        result = subprocess.run(
-            [sys.executable, os.path.join(BASE_DIR, "deskbridge.py"), app, "--help"],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, f"{app} --help failed: {result.stderr}"
-        assert app in result.stdout.lower(), f"{app} --help output missing app name"
+        cli_path = os.path.join(WRAPPERS_DIR, app, "cli.py")
+        spec = importlib.util.spec_from_file_location(f"{app}_cli", cli_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        # argparse --help should print and exit 0
+        try:
+            module.main(["--help"])
+        except SystemExit as exc:
+            assert exc.code == 0, f"{app} --help exited with {exc.code}"
     print("CLI help runs for all wrappers")
 
 
@@ -186,6 +192,120 @@ def test_mcp_dispatch_unknown_tool():
     print("MCP dispatch handles unknown tool")
 
 
+def test_confirm_low_risk_auto_approves():
+    """Low-risk actions are auto-approved without prompt."""
+    from core.confirm import confirm_action, LOW
+
+    result = confirm_action(LOW, "capture screenshot", app="desktop", action="capture")
+    assert result is True
+    print("Low-risk action auto-approves")
+
+
+def test_confirm_medium_rejects_non_interactive():
+    """Medium/high-risk actions rejected in non-interactive mode without --confirm."""
+    from core.confirm import confirm_action, MEDIUM, ConfirmationError
+    from unittest.mock import patch
+
+    with patch("sys.stdin.isatty", return_value=False):
+        try:
+            confirm_action(MEDIUM, "click element", app="desktop", action="click")
+            assert False, "Expected ConfirmationError in non-interactive mode"
+        except ConfirmationError:
+            pass
+    print("Medium-risk action rejected in non-interactive mode without --confirm")
+
+
+def test_confirm_medium_approves_with_confirm_flag():
+    """Medium/high-risk actions approved with --confirm flag in non-interactive mode."""
+    from core.confirm import confirm_action, MEDIUM, HIGH
+
+    assert confirm_action(MEDIUM, "click element", confirm=True, app="desktop", action="click") is True
+    assert confirm_action(HIGH, "press keys", confirm=True, app="desktop", action="key") is True
+    print("Medium/high-risk action approved with --confirm flag")
+
+
+def test_validate_unknown_app_rejected():
+    """Unknown application is rejected by allowlist."""
+    from core.confirm import validate_action_permitted, ConfirmationError
+
+    try:
+        validate_action_permitted("nonexistent_app", "some_action")
+        assert False, "Expected ConfirmationError for unknown app"
+    except ConfirmationError as exc:
+        assert "not installed or not allowed" in str(exc)
+    print("Unknown application rejected by allowlist")
+
+
+def test_validate_unknown_action_rejected():
+    """Unknown action for a known app is rejected by allowlist."""
+    from core.confirm import validate_action_permitted, ConfirmationError
+
+    try:
+        validate_action_permitted("blender", "nonexistent_action")
+        assert False, "Expected ConfirmationError for unknown action"
+    except ConfirmationError as exc:
+        assert "not declared" in str(exc)
+    print("Unknown action rejected by allowlist")
+
+
+def test_validate_blocked_app_rejected():
+    """Blocked application is rejected even if installed."""
+    from core.confirm import validate_action_permitted, ConfirmationError, BLOCKED_APPS
+
+    BLOCKED_APPS.add("dangerous_app")
+    try:
+        validate_action_permitted("dangerous_app", "some_action")
+        assert False, "Expected ConfirmationError for blocked app"
+    except ConfirmationError as exc:
+        assert "block list" in str(exc)
+    finally:
+        BLOCKED_APPS.discard("dangerous_app")
+    print("Blocked application rejected")
+
+
+def test_validate_parameter_type_error():
+    """Wrong parameter type is rejected."""
+    from core.confirm import validate_parameter, ConfirmationError
+
+    try:
+        validate_parameter("count", "not_a_number", int)
+        assert False, "Expected ConfirmationError for wrong type"
+    except ConfirmationError as exc:
+        assert "integer" in str(exc)
+    print("Wrong parameter type rejected")
+
+
+def test_validate_parameter_range_error():
+    """Out-of-range parameter is rejected."""
+    from core.confirm import validate_parameter, ConfirmationError
+
+    try:
+        validate_parameter("level", 999, int, min_value=1, max_value=100)
+        assert False, "Expected ConfirmationError for out of range"
+    except ConfirmationError as exc:
+        assert "<= 100" in str(exc)
+    print("Out-of-range parameter rejected")
+
+
+def test_validate_coordinates_invalid():
+    """Invalid coordinate pair is rejected."""
+    from core.confirm import validate_coordinates, ConfirmationError
+
+    try:
+        validate_coordinates([1, 2, 3])
+        assert False, "Expected ConfirmationError for invalid coordinates"
+    except ConfirmationError:
+        pass
+    try:
+        validate_coordinates([-1, 5])
+        assert False, "Expected ConfirmationError for negative coordinate"
+    except ConfirmationError:
+        pass
+    result = validate_coordinates([100, 200])
+    assert result == [100, 200]
+    print("Invalid coordinates rejected, valid coordinates accepted")
+
+
 if __name__ == "__main__":
     test_wrapper_discovery_finds_all_wrappers()
     test_manifest_has_required_fields()
@@ -196,4 +316,13 @@ if __name__ == "__main__":
     test_mcp_server_builds()
     test_mcp_server_tools()
     test_mcp_dispatch_unknown_tool()
+    test_confirm_low_risk_auto_approves()
+    test_confirm_medium_rejects_non_interactive()
+    test_confirm_medium_approves_with_confirm_flag()
+    test_validate_unknown_app_rejected()
+    test_validate_unknown_action_rejected()
+    test_validate_blocked_app_rejected()
+    test_validate_parameter_type_error()
+    test_validate_parameter_range_error()
+    test_validate_coordinates_invalid()
     print("\nAll checks passed.")

@@ -12,7 +12,7 @@ sys.path.insert(
 )
 
 from core.confirm import confirm_action
-from .actions import placeholder_action
+from wrappers.zotero.actions import placeholder_action
 
 
 def main(argv=None):

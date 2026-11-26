@@ -12,7 +12,7 @@ sys.path.insert(
 )
 
 from core.confirm import confirm_action
-from .actions import render_scene
+from wrappers.blender.actions import render_scene
 
 
 def main(argv=None):
