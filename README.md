@@ -198,17 +198,55 @@ rejected even if a wrapper is installed. Add dangerous system processes here.
 ### Activity logging
 
 Every action and confirmation decision is recorded to `logs/activity.log` as
-one JSON record per line:
+one JSON record per line (JSON Lines / NDJSON):
 
 ```json
-{"timestamp": "2026-11-26T10:30:00.123456", "app": "blender", "action": "render", "args": {"file": "scene.blend"}, "status": "success", "message": ""}
+{"timestamp": "2026-11-26T10:30:00.123456", "version": 1, "app": "blender", "action": "render", "args": {"file": "[REDACTED]", "output": "[REDACTED]"}, "status": "success", "message": "Render completed"}
 ```
 
-Status values: `success`, `failed`, `rejected`, `cancelled`.
-Logs are append-only and never auto-deleted; use `deskbridge log` to read or
-`core.activity_log.clear_logs()` to clear programmatically.
+| Field | Description |
+|-------|-------------|
+| `timestamp` | ISO 8601 timestamp when the action occurred |
+| `version` | Log record schema version (currently `1`) |
+| `app` | Wrapper/application name |
+| `action` | Action performed |
+| `args` | Input arguments (sensitive values redacted) |
+| `status` | `success`, `failed`, `rejected`, or `cancelled` |
+| `message` | Detail message (sensitive content redacted) |
+
+**Sensitive data sanitization:** File paths, text content, passwords, tokens,
+and other potentially sensitive values are automatically replaced with
+`"[REDACTED]"` before being written. The key is preserved for audit purposes.
+
+**Log rotation:** When `logs/activity.log` exceeds 10 MB, it is rotated to
+`activity.log.1`, `activity.log.2`, etc., up to 5 rotations. Oldest rotations
+are deleted automatically.
+
+**Retention:** Log records older than 30 days are automatically removed on each
+write. Set `RETENTION_DAYS = 0` in `core.activity_log.py` to disable.
 
 **No API keys, tokens, passwords, or credentials are stored in code or logs.**
+
+Read logs:
+```bash
+python deskbridge.py log [limit]
+```
+
+Get log statistics:
+```python
+from core.activity_log import get_log_stats
+stats = get_log_stats()
+# Returns total_entries, status_counts, app_counts, action_counts,
+# oldest_timestamp, newest_timestamp, log_file_exists, log_file_size_bytes
+```
+
+Clear all logs (including rotated files):
+```bash
+# Programmatically:
+from core.activity_log import clear_logs
+clear_logs()
+```
+
 
 ### Local validation before execution
 

@@ -306,6 +306,101 @@ def test_validate_coordinates_invalid():
     print("Invalid coordinates rejected, valid coordinates accepted")
 
 
+# --- Activity logging tests ---
+
+def test_activity_log_sanitizes_sensitive_keys():
+    """Sensitive keys (password, token, file path) are redacted in log."""
+    from core.activity_log import record_action, read_logs, clear_logs
+
+    clear_logs()
+    record_action(
+        "testapp",
+        "testaction",
+        {"password": "secret123", "file": "/path/to/secret.blend", "count": 5},
+        "success",
+        "done",
+    )
+    logs = read_logs()
+    assert len(logs) == 1
+    assert logs[0]["args"]["password"] == "[REDACTED]"
+    assert logs[0]["args"]["file"] == "[REDACTED]"
+    assert logs[0]["args"]["count"] == 5
+    print("Activity log sanitizes sensitive keys")
+
+
+def test_activity_log_sanitizes_sensitive_values():
+    """Values that look like tokens/hashes are redacted."""
+    from core.activity_log import record_action, read_logs, clear_logs
+
+    clear_logs()
+    record_action(
+        "testapp",
+        "testaction",
+        {"token": "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567"},
+        "success",
+        "done",
+    )
+    logs = read_logs()
+    assert len(logs) == 1
+    assert logs[0]["args"]["token"] == "[REDACTED]"
+    print("Activity log sanitizes sensitive values")
+
+
+def test_activity_log_rejects_invalid_status():
+    """record_action raises ValueError for invalid status."""
+    from core.activity_log import record_action
+
+    try:
+        record_action("testapp", "testaction", {}, "invalid_status")
+        assert False, "Expected ValueError for invalid status"
+    except ValueError:
+        pass
+    print("Activity log rejects invalid status")
+
+
+def test_activity_log_get_stats():
+    """get_log_stats returns correct summary."""
+    from core.activity_log import record_action, read_logs, clear_logs, get_log_stats
+
+    clear_logs()
+    record_action("app1", "action1", {}, "success", "")
+    record_action("app1", "action2", {}, "failed", "error")
+    record_action("app2", "action1", {}, "success", "")
+
+    stats = get_log_stats()
+    assert stats["total_entries"] == 3
+    assert stats["status_counts"]["success"] == 2
+    assert stats["status_counts"]["failed"] == 1
+    assert stats["app_counts"]["app1"] == 2
+    assert stats["app_counts"]["app2"] == 1
+    assert stats["log_file_exists"] is True
+    print("Activity log stats correct")
+
+
+def test_activity_log_clear_removes_all():
+    """clear_logs removes all records."""
+    from core.activity_log import record_action, read_logs, clear_logs
+
+    clear_logs()
+    record_action("app1", "action1", {}, "success", "")
+    assert len(read_logs()) == 1
+    clear_logs()
+    assert len(read_logs()) == 0
+    print("Activity log clear removes all records")
+
+
+def test_activity_log_read_limit():
+    """read_logs respects limit parameter."""
+    from core.activity_log import record_action, read_logs, clear_logs
+
+    clear_logs()
+    for i in range(5):
+        record_action("app1", f"action{i}", {}, "success", "")
+    logs = read_logs(limit=3)
+    assert len(logs) == 3
+    print("Activity log read limit works")
+
+
 if __name__ == "__main__":
     test_wrapper_discovery_finds_all_wrappers()
     test_manifest_has_required_fields()
@@ -325,4 +420,10 @@ if __name__ == "__main__":
     test_validate_parameter_type_error()
     test_validate_parameter_range_error()
     test_validate_coordinates_invalid()
+    test_activity_log_sanitizes_sensitive_keys()
+    test_activity_log_sanitizes_sensitive_values()
+    test_activity_log_rejects_invalid_status()
+    test_activity_log_get_stats()
+    test_activity_log_clear_removes_all()
+    test_activity_log_read_limit()
     print("\nAll checks passed.")
